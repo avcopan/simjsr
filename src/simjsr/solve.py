@@ -1,6 +1,7 @@
 """Reactors."""
 
 import signal
+from collections.abc import Mapping, Sequence
 from copy import replace
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,14 +19,14 @@ class Config:
         pressure: Pressure (atm)
         residence_time: Residence time (s)
         volume: Volume (cm^3)
-        concentrations: Starting concentrations
+        composition: Starting composition (mole fractions)
         time_out: Time limit for the simulation (s)
     """
 
     temperature: float
     pressure: float
     residence_time: float
-    concentrations: dict[str, float]
+    composition: dict[str, float]
     volume: float = 1.0
     time_out: int | None = None
 
@@ -57,36 +58,70 @@ def single(mech_file: str | Path, config: Config) -> Solution:
 
 
 def multi(
-    mech_file: str | Path, configs: list[Config], *, chain: bool = True
+    mech_file: str | Path, configs: Sequence[Config], *, chain: bool = True
 ) -> SolutionArray:
     """Run multiple jet-stirred reactor simulations.
 
     Args:
         mech_file: Mechanism file path
         configs: Configurations for the simulations
-        chain: Whether to use the concentrations from the previous simulation as
+        chain: Whether to use the composition from the previous simulation as
             the starting point for the next simulation, if their initial
-            concentrations match (default: True)
+            composition match (default: True)
 
     Returns:
         Array of steady state solutions for each simulation
     """
-    conc0 = None
-    conc = None
+    comp0 = None
+    comp = None
     phase = ct.Solution(mech_file)
     solns = SolutionArray(phase)
     for config0 in configs:
-        # If requested, re-use solved concentrations
+        # If requested, re-use solved composition
         config = config0
-        if chain and config0.concentrations == conc0:
-            config = replace(config0, concentrations=conc)
+        if chain and config0.composition == comp0:
+            config = replace(config0, composition=comp)
 
         soln = single(mech_file=mech_file, config=config)
         solns.append(soln.state)
 
-        conc0 = config0.concentrations
-        conc = soln.X
+        comp0 = config0.composition
+        comp = soln.X
     return solns
+
+
+def multi_temperature(
+    mech_file: str | Path, config: Config, temperatures: Sequence[float]
+) -> SolutionArray:
+    """Run multiple jet-stirred reactor simulations at different temperatures.
+
+    Args:
+        mech_file: Mechanism file path
+        config: Base configuration for the simulations
+        temperatures: List of temperatures (K)
+
+    Returns:
+        Array of steady state solutions for each simulation
+    """
+    configs = [replace(config, temperature=t) for t in temperatures]
+    return multi(mech_file, configs)
+
+
+def multi_composition(
+    mech_file: str | Path, config: Config, compositions: Sequence[Mapping[str, float]]
+) -> SolutionArray:
+    """Run multiple jet-stirred reactor simulations at different compositions.
+
+    Args:
+        mech_file: Mechanism file path
+        config: Base configuration for the simulations
+        compositions: List of compositions (mole fractions)
+
+    Returns:
+        Array of steady state solutions for each simulation
+    """
+    configs = [replace(config, composition=comp) for comp in compositions]
+    return multi(mech_file, configs)
 
 
 def _single(mech_file: str | Path, config: Config) -> Solution:
@@ -101,8 +136,8 @@ def _single(mech_file: str | Path, config: Config) -> Solution:
     """
     phase = ct.Solution(mech_file)
 
-    # Use concentrations from the previous iteration to speed up convergence
-    phase.TPX = config.temperature, config.pressure * ct.one_atm, config.concentrations
+    # Use composition from the previous iteration to speed up convergence
+    phase.TPX = config.temperature, config.pressure * ct.one_atm, config.composition
 
     # Set up JSR: inlet -> flow control -> reactor -> pressure control -> exhaust
     volume_m3 = config.volume * (1e-2) ** 3
