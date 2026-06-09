@@ -1,5 +1,6 @@
 """Reactors."""
 
+import signal
 from dataclasses import dataclass
 
 import cantera as ct
@@ -16,6 +17,7 @@ class Config:
         residence_time: Residence time (s)
         volume: Volume (cm^3)
         concentrations: Starting concentrations
+        time_out: Time limit for the simulation (s)
     """
 
     temperature: float
@@ -23,10 +25,37 @@ class Config:
     residence_time: float
     concentrations: dict[str, float]
     volume: float = 1.0
+    time_out: int | None = None
 
 
 def single(model: Solution, config: Config) -> Reactor:
     """Run a single jet-stirred reactor simulation.
+
+    Args:
+        model: Chemical kinetics model
+        config: Configuration for the simulation
+
+    Returns:
+        Reactor at steady state
+
+    Raises:
+        TimeoutError: If the simulation exceeds the configured time limit
+    """
+    # Set up a timeout handler to prevent simulations from running indefinitely
+    if config.time_out is not None:
+        signal.signal(signal.SIGALRM, _timeout_handler)
+        signal.alarm(config.time_out)
+
+    try:
+        reactor = _single(model=model, config=config)
+    finally:
+        signal.alarm(0)
+
+    return reactor
+
+
+def _single(model: Solution, config: Config) -> Reactor:
+    """Run a single jet-stirred reactor simulation (no timeout handling).
 
     Args:
         model: Chemical kinetics model
@@ -56,3 +85,8 @@ def single(model: Solution, config: Config) -> Reactor:
     reactor_net = ct.ReactorNet([reactor])
     reactor_net.advance_to_steady_state(max_steps=100000)
     return reactor
+
+
+def _timeout_handler(_signum: int, _frame: object) -> None:
+    msg = "The simulation exceeded the configured time limit."
+    raise TimeoutError(msg)

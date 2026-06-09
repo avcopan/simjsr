@@ -14,6 +14,12 @@ def grimech_model(data_path: Path) -> ct.Solution:
     return ct.Solution(data_path / "grimech3.0/chem.yaml")
 
 
+@pytest.fixture
+def slow_model(data_path: Path) -> ct.Solution:
+    """Slow model."""
+    return ct.Solution(data_path / "slow/chem.yaml")
+
+
 @pytest.mark.parametrize(
     argnames=("temperature", "pressure", "residence_time", "concentrations"),
     argvalues=[
@@ -35,3 +41,16 @@ def test__single(
         concentrations=concentrations,
     )
     run.single(model=grimech_model, config=config)
+
+
+def test__timeout(slow_model: ct.Solution) -> None:
+    """Test that a timeout error is raised when the simulation takes too long."""
+    config = run.Config(
+        temperature=825,
+        pressure=1.1,
+        residence_time=4,
+        concentrations={"CPT(563)": 0.005, "O2(6)": 0.133928571, "N2": 0.861071429},
+        time_out=1,
+    )
+    with pytest.raises(TimeoutError):
+        run.single(model=slow_model, config=config)
