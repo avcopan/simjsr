@@ -2,6 +2,6 @@
 
 __version__ = "0.0.0"
 
-from . import convert, run
+from . import convert, solve
 
-__all__ = ["convert", "run"]
+__all__ = ["convert", "solve"]

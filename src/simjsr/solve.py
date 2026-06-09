@@ -49,11 +49,11 @@ def single(mech_file: str | Path, config: Config) -> Solution:
         signal.alarm(config.time_out)
 
     try:
-        result = _single(mech_file=mech_file, config=config)
+        soln = _single(mech_file=mech_file, config=config)
     finally:
         signal.alarm(0)
 
-    return result
+    return soln
 
 
 def multi(
@@ -74,19 +74,19 @@ def multi(
     conc0 = None
     conc = None
     phase = ct.Solution(mech_file)
-    results = SolutionArray(phase)
+    solns = SolutionArray(phase)
     for config0 in configs:
         # If requested, re-use solved concentrations
         config = config0
         if chain and config0.concentrations == conc0:
             config = replace(config0, concentrations=conc)
 
-        result = single(mech_file=mech_file, config=config)
-        results.append(result.state)
+        soln = single(mech_file=mech_file, config=config)
+        solns.append(soln.state)
 
         conc0 = config0.concentrations
-        conc = result.X
-    return results
+        conc = soln.X
+    return solns
 
 
 def _single(mech_file: str | Path, config: Config) -> Solution:

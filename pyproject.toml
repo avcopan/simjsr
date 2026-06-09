@@ -50,7 +50,7 @@ name = "Module Layering"
 type = "layers"
 containers = "simjsr"
 layers = [
-    "convert | run",
+    "convert | solve",
 ]
 
 # Pytest configurations

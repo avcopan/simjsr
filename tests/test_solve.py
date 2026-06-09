@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from simjsr import run
-from simjsr.run import Config
+from simjsr import solve
+from simjsr.solve import Config
 
 
 @pytest.fixture
@@ -47,13 +47,13 @@ def slow_config() -> Config:
 
 def test__single(grimech_file: Path, grimech_config: Config) -> None:
     """Stub test to ensure the test suite runs."""
-    run.single(grimech_file, config=grimech_config)
+    solve.single(grimech_file, config=grimech_config)
 
 
 def test__timeout(slowmech_file: Path, slow_config: Config) -> None:
     """Test that a timeout error is raised when the simulation takes too long."""
     with pytest.raises(TimeoutError):
-        run.single(slowmech_file, config=slow_config)
+        solve.single(slowmech_file, config=slow_config)
 
 
 @pytest.mark.parametrize(
@@ -67,4 +67,4 @@ def test__multi(
 ) -> None:
     """Stub test to ensure the test suite runs."""
     configs = [replace(grimech_config, **{arg_name: v}) for v in arg_values]
-    run.multi(grimech_file, configs=configs)
+    solve.multi(grimech_file, configs=configs)
