@@ -51,9 +51,9 @@ root_package = "simjsr"
 [[tool.importlinter.contracts]]
 name = "Module Layering"
 type = "layers"
+containers = "simjsr"
 layers = [
-    "simjsr.layer2",
-    "simjsr.layer1",
+    "convert | run",
 ]
 
 # Pytest configurations
