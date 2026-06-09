@@ -1,10 +1,11 @@
 """Reactors."""
 
 import signal
+from copy import replace
 from dataclasses import dataclass
 
 import cantera as ct
-from cantera import Reactor, Solution
+from cantera import Solution, SolutionArray
 
 
 @dataclass
@@ -28,7 +29,7 @@ class Config:
     time_out: int | None = None
 
 
-def single(model: Solution, config: Config) -> Reactor:
+def single(model: Solution, config: Config) -> Solution:
     """Run a single jet-stirred reactor simulation.
 
     Args:
@@ -36,7 +37,7 @@ def single(model: Solution, config: Config) -> Reactor:
         config: Configuration for the simulation
 
     Returns:
-        Reactor at steady state
+        Steady state solution
 
     Raises:
         TimeoutError: If the simulation exceeds the configured time limit
@@ -47,14 +48,63 @@ def single(model: Solution, config: Config) -> Reactor:
         signal.alarm(config.time_out)
 
     try:
-        reactor = _single(model=model, config=config)
+        result = _single(model=model, config=config)
     finally:
         signal.alarm(0)
 
-    return reactor
+    return result
 
 
-def _single(model: Solution, config: Config) -> Reactor:
+def multi(
+    model: Solution, configs: list[Config], *, chain: bool = True
+) -> SolutionArray:
+    """Run multiple jet-stirred reactor simulations.
+
+    Args:
+        model: Chemical kinetics model
+        configs: Configurations for the simulations
+        chain: Whether to use the concentrations from the previous simulation as
+            the starting point for the next simulation, if their initial
+            concentrations match (default: True)
+
+    Returns:
+        Array of steady state solutions for each simulation
+    """
+    conc0 = None
+    conc = None
+    results = SolutionArray(model)
+    for config0 in configs:
+        # If requested, re-use solved concentrations
+        config = config0
+        if chain and config0.concentrations == conc0:
+            config = replace(config0, concentrations=conc)
+
+        result = single(model=model, config=config)
+        results.append(result.state)
+
+        conc0 = config0.concentrations
+        conc = result.X
+    return results
+
+
+def multi_temperature(
+    model: Solution, config: Config, temperatures: list[float]
+) -> SolutionArray:
+    """Run multiple jet-stirred reactor simulations at different temperatures.
+
+    Args:
+        model: Chemical kinetics model
+        config: Configuration for the simulations (except temperature)
+        temperatures: Temperatures to simulate (K)
+
+    Returns:
+        Array of steady state solutions for each simulation
+    """
+    configs = [replace(config, temperature=T) for T in temperatures]
+    return multi(model=model, configs=configs, chain=True)
+
+
+def _single(model: Solution, config: Config) -> Solution:
     """Run a single jet-stirred reactor simulation (no timeout handling).
 
     Args:
@@ -62,7 +112,7 @@ def _single(model: Solution, config: Config) -> Reactor:
         config: Configuration for the simulation
 
     Returns:
-        Reactor at steady state
+        Steady state solution
     """
     # Use concentrations from the previous iteration to speed up convergence
     model.TPX = config.temperature, config.pressure * ct.one_atm, config.concentrations
@@ -84,7 +134,7 @@ def _single(model: Solution, config: Config) -> Reactor:
     )
     reactor_net = ct.ReactorNet([reactor])
     reactor_net.advance_to_steady_state(max_steps=100000)
-    return reactor
+    return reactor.phase
 
 
 def _timeout_handler(_signum: int, _frame: object) -> None:

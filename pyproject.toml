@@ -2,7 +2,7 @@
 name = "simjsr"
 version = "0.0.0"
 authors = [{name = "Andreas V. Copan", email = "avcopan@uga.edu"}]
-requires-python = ">= 3.12"
+requires-python = ">= 3.13"
 dependencies = [
     "cantera>=3.2.0",
 ]
@@ -13,10 +13,7 @@ requires = ["uv_build<0.12"]
 
 # Ruff configurations
 [tool.ruff]
-exclude = [
-    "docs",
-    "**/*.ipynb",
-]
+exclude = ["docs"]
 
 [tool.ruff.lint]
 select = ["ALL"]
