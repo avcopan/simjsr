@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import cantera as ct
-from cantera import Solution, SolutionArray
+from cantera import Solution
 
 
 @dataclass
@@ -59,7 +59,7 @@ def single(mech_file: str | Path, config: Config) -> Solution:
 
 def multi(
     mech_file: str | Path, configs: Sequence[Config], *, chain: bool = True
-) -> SolutionArray:
+) -> list[Solution]:
     """Run multiple jet-stirred reactor simulations.
 
     Args:
@@ -74,8 +74,7 @@ def multi(
     """
     comp0 = None
     comp = None
-    phase = ct.Solution(mech_file)
-    solns = SolutionArray(phase)
+    solns = []
     for config0 in configs:
         # If requested, re-use solved composition
         config = config0
@@ -83,7 +82,7 @@ def multi(
             config = replace(config0, composition=comp)
 
         soln = single(mech_file=mech_file, config=config)
-        solns.append(soln.state)
+        solns.append(soln)
 
         comp0 = config0.composition
         comp = soln.X
@@ -92,7 +91,7 @@ def multi(
 
 def multi_temperature(
     mech_file: str | Path, config: Config, temperatures: Sequence[float]
-) -> SolutionArray:
+) -> list[Solution]:
     """Run multiple jet-stirred reactor simulations at different temperatures.
 
     Args:
@@ -109,7 +108,7 @@ def multi_temperature(
 
 def multi_composition(
     mech_file: str | Path, config: Config, compositions: Sequence[Mapping[str, float]]
-) -> SolutionArray:
+) -> list[Solution]:
     """Run multiple jet-stirred reactor simulations at different compositions.
 
     Args:
