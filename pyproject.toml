@@ -3,7 +3,9 @@ name = "simjsr"
 version = "0.0.0"
 authors = [{name = "Andreas V. Copan", email = "avcopan@uga.edu"}]
 requires-python = ">= 3.12"
-dependencies = []
+dependencies = [
+    "cantera>=3.2.0",
+]
 
 [build-system]
 build-backend = "uv_build"
@@ -30,7 +32,7 @@ ignore = [
 "tests/**.py" = ["S101"]
 
 [tool.ruff.lint.pydocstyle]
-convention = "numpy"
+convention = "google"
 
 # Ty configurations
 [tool.ty.environment]
