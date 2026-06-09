@@ -1,8 +1,9 @@
 """Test simjsr.run."""
 
+from copy import replace
 from pathlib import Path
+from typing import Any
 
-import cantera as ct
 import pytest
 
 from simjsr import run
@@ -10,15 +11,15 @@ from simjsr.run import Config
 
 
 @pytest.fixture
-def grimech_model(data_path: Path) -> ct.Solution:
+def grimech_file(data_path: Path) -> Path:
     """Grimech 3.0 model."""
-    return ct.Solution(data_path / "grimech3.0/chem.yaml")
+    return data_path / "grimech3.0" / "chem.yaml"
 
 
 @pytest.fixture
-def slow_model(data_path: Path) -> ct.Solution:
+def slowmech_file(data_path: Path) -> Path:
     """Slow model."""
-    return ct.Solution(data_path / "slow/chem.yaml")
+    return data_path / "slow" / "chem.yaml"
 
 
 @pytest.fixture
@@ -44,19 +45,26 @@ def slow_config() -> Config:
     )
 
 
-def test__single(grimech_model: ct.Solution, grimech_config: Config) -> None:
+def test__single(grimech_file: Path, grimech_config: Config) -> None:
     """Stub test to ensure the test suite runs."""
-    run.single(grimech_model, config=grimech_config)
+    run.single(grimech_file, config=grimech_config)
 
 
-def test__timeout(slow_model: ct.Solution, slow_config: Config) -> None:
+def test__timeout(slowmech_file: Path, slow_config: Config) -> None:
     """Test that a timeout error is raised when the simulation takes too long."""
     with pytest.raises(TimeoutError):
-        run.single(slow_model, config=slow_config)
+        run.single(slowmech_file, config=slow_config)
 
 
-def test__multi_temperature(grimech_model: ct.Solution, grimech_config: Config) -> None:
+@pytest.mark.parametrize(
+    argnames=("arg_name", "arg_values"),
+    argvalues=[
+        ("temperature", [800, 900, 1000]),
+    ],
+)
+def test__multi(
+    grimech_file: Path, grimech_config: Config, arg_name: str, arg_values: list[Any]
+) -> None:
     """Stub test to ensure the test suite runs."""
-    run.multi_temperature(
-        grimech_model, config=grimech_config, temperatures=[900, 1000, 1100]
-    )
+    configs = [replace(grimech_config, **{arg_name: v}) for v in arg_values]
+    run.multi(grimech_file, configs=configs)

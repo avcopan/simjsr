@@ -3,6 +3,7 @@
 import signal
 from copy import replace
 from dataclasses import dataclass
+from pathlib import Path
 
 import cantera as ct
 from cantera import Solution, SolutionArray
@@ -29,11 +30,11 @@ class Config:
     time_out: int | None = None
 
 
-def single(model: Solution, config: Config) -> Solution:
+def single(mech_file: str | Path, config: Config) -> Solution:
     """Run a single jet-stirred reactor simulation.
 
     Args:
-        model: Chemical kinetics model
+        mech_file: Mechanism file path
         config: Configuration for the simulation
 
     Returns:
@@ -48,7 +49,7 @@ def single(model: Solution, config: Config) -> Solution:
         signal.alarm(config.time_out)
 
     try:
-        result = _single(model=model, config=config)
+        result = _single(mech_file=mech_file, config=config)
     finally:
         signal.alarm(0)
 
@@ -56,12 +57,12 @@ def single(model: Solution, config: Config) -> Solution:
 
 
 def multi(
-    model: Solution, configs: list[Config], *, chain: bool = True
+    mech_file: str | Path, configs: list[Config], *, chain: bool = True
 ) -> SolutionArray:
     """Run multiple jet-stirred reactor simulations.
 
     Args:
-        model: Chemical kinetics model
+        mech_file: Mechanism file path
         configs: Configurations for the simulations
         chain: Whether to use the concentrations from the previous simulation as
             the starting point for the next simulation, if their initial
@@ -72,14 +73,15 @@ def multi(
     """
     conc0 = None
     conc = None
-    results = SolutionArray(model)
+    phase = ct.Solution(mech_file)
+    results = SolutionArray(phase)
     for config0 in configs:
         # If requested, re-use solved concentrations
         config = config0
         if chain and config0.concentrations == conc0:
             config = replace(config0, concentrations=conc)
 
-        result = single(model=model, config=config)
+        result = single(mech_file=mech_file, config=config)
         results.append(result.state)
 
         conc0 = config0.concentrations
@@ -87,41 +89,26 @@ def multi(
     return results
 
 
-def multi_temperature(
-    model: Solution, config: Config, temperatures: list[float]
-) -> SolutionArray:
-    """Run multiple jet-stirred reactor simulations at different temperatures.
-
-    Args:
-        model: Chemical kinetics model
-        config: Configuration for the simulations (except temperature)
-        temperatures: Temperatures to simulate (K)
-
-    Returns:
-        Array of steady state solutions for each simulation
-    """
-    configs = [replace(config, temperature=T) for T in temperatures]
-    return multi(model=model, configs=configs, chain=True)
-
-
-def _single(model: Solution, config: Config) -> Solution:
+def _single(mech_file: str | Path, config: Config) -> Solution:
     """Run a single jet-stirred reactor simulation (no timeout handling).
 
     Args:
-        model: Chemical kinetics model
+        mech_file: Mechanism file path
         config: Configuration for the simulation
 
     Returns:
         Steady state solution
     """
+    phase = ct.Solution(mech_file)
+
     # Use concentrations from the previous iteration to speed up convergence
-    model.TPX = config.temperature, config.pressure * ct.one_atm, config.concentrations
+    phase.TPX = config.temperature, config.pressure * ct.one_atm, config.concentrations
 
     # Set up JSR: inlet -> flow control -> reactor -> pressure control -> exhaust
     volume_m3 = config.volume * (1e-2) ** 3
-    reactor = ct.IdealGasReactor(model, energy="off", volume=volume_m3, clone=True)
-    exhaust = ct.Reservoir(model, clone=True)
-    inlet = ct.Reservoir(model, clone=True)
+    reactor = ct.IdealGasReactor(phase, energy="off", volume=volume_m3, clone=True)
+    exhaust = ct.Reservoir(phase, clone=True)
+    inlet = ct.Reservoir(phase, clone=True)
     ct.PressureController(
         upstream=reactor,
         downstream=exhaust,
