@@ -1,6 +1,6 @@
 """simrun."""
 
-__version__ = "0.0.0"
+__version__ = "0.0.1"
 
 from . import config, convert, run
 from .config import Config
