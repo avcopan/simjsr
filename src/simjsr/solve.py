@@ -15,6 +15,7 @@ class Config:
     """Configuration for a jet-stirred reactor simulation.
 
     Attributes:
+        mech_file: Mechanism file path
         temperature: Temperature (K)
         pressure: Pressure (atm)
         residence_time: Residence time (s)
@@ -23,6 +24,7 @@ class Config:
         time_out: Time limit for the simulation (s)
     """
 
+    mech_file: Path
     temperature: float
     pressure: float
     residence_time: float
@@ -30,12 +32,19 @@ class Config:
     volume: float = 1.0
     time_out: int | None = None
 
+    def is_compatible_with(self, other: "Config | None") -> bool:
+        """Check if this config is compatible with another config for chaining."""
+        if other is None:
+            return False
+        return (
+            self.mech_file == other.mech_file and self.composition == other.composition
+        )
 
-def single(mech_file: str | Path, config: Config) -> Solution:
+
+def single(config: Config) -> Solution:
     """Run a single jet-stirred reactor simulation.
 
     Args:
-        mech_file: Mechanism file path
         config: Configuration for the simulation
 
     Returns:
@@ -50,20 +59,17 @@ def single(mech_file: str | Path, config: Config) -> Solution:
         signal.alarm(config.time_out)
 
     try:
-        soln = _single(mech_file=mech_file, config=config)
+        soln = _single(config=config)
     finally:
         signal.alarm(0)
 
     return soln
 
 
-def multi(
-    mech_file: str | Path, configs: Sequence[Config], *, chain: bool = True
-) -> list[Solution]:
+def multi(configs: Sequence[Config], *, chain: bool = True) -> list[Solution]:
     """Run multiple jet-stirred reactor simulations.
 
     Args:
-        mech_file: Mechanism file path
         configs: Configurations for the simulations
         chain: Whether to use the composition from the previous simulation as
             the starting point for the next simulation, if their initial
@@ -72,30 +78,31 @@ def multi(
     Returns:
         Array of steady state solutions for each simulation
     """
-    comp0 = None
-    comp = None
+    last_config = last_soln = None
     solns = []
-    for config0 in configs:
+    for init_config in configs:
         # If requested, re-use solved composition
-        config = config0
-        if chain and config0.composition == comp0:
-            config = replace(config0, composition=comp)
+        config = init_config
+        if (
+            chain
+            and init_config.is_compatible_with(last_config)
+            and last_soln is not None
+        ):
+            config = replace(init_config, composition=last_soln.X)
 
-        soln = single(mech_file=mech_file, config=config)
+        soln = single(config=config)
         solns.append(soln)
 
-        comp0 = config0.composition
-        comp = soln.X
+        last_config = init_config
+        last_soln = soln
+
     return solns
 
 
-def multi_temperature(
-    mech_file: str | Path, config: Config, temperatures: Sequence[float]
-) -> list[Solution]:
+def multi_temperature(config: Config, temperatures: Sequence[float]) -> list[Solution]:
     """Run multiple jet-stirred reactor simulations at different temperatures.
 
     Args:
-        mech_file: Mechanism file path
         config: Base configuration for the simulations
         temperatures: List of temperatures (K)
 
@@ -103,16 +110,15 @@ def multi_temperature(
         Array of steady state solutions for each simulation
     """
     configs = [replace(config, temperature=t) for t in temperatures]
-    return multi(mech_file, configs)
+    return multi(configs)
 
 
 def multi_composition(
-    mech_file: str | Path, config: Config, compositions: Sequence[Mapping[str, float]]
+    config: Config, compositions: Sequence[Mapping[str, float]]
 ) -> list[Solution]:
     """Run multiple jet-stirred reactor simulations at different compositions.
 
     Args:
-        mech_file: Mechanism file path
         config: Base configuration for the simulations
         compositions: List of compositions (mole fractions)
 
@@ -120,20 +126,19 @@ def multi_composition(
         Array of steady state solutions for each simulation
     """
     configs = [replace(config, composition=comp) for comp in compositions]
-    return multi(mech_file, configs)
+    return multi(configs)
 
 
-def _single(mech_file: str | Path, config: Config) -> Solution:
+def _single(config: Config) -> Solution:
     """Run a single jet-stirred reactor simulation (no timeout handling).
 
     Args:
-        mech_file: Mechanism file path
         config: Configuration for the simulation
 
     Returns:
         Steady state solution
     """
-    phase = ct.Solution(mech_file)
+    phase = ct.Solution(config.mech_file)
 
     # Use composition from the previous iteration to speed up convergence
     phase.TPX = config.temperature, config.pressure * ct.one_atm, config.composition
