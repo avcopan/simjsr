@@ -2,6 +2,7 @@
 
 __version__ = "0.0.0"
 
-from . import convert, solve
+from . import config, convert, solve
+from .config import Config
 
-__all__ = ["convert", "solve"]
+__all__ = ["config", "convert", "solve", "Config"]

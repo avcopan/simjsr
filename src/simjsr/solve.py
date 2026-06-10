@@ -3,42 +3,11 @@
 import signal
 from collections.abc import Mapping, Sequence
 from copy import replace
-from dataclasses import dataclass
-from pathlib import Path
 
 import cantera as ct
 from cantera import Solution
 
-
-@dataclass
-class Config:
-    """Configuration for a jet-stirred reactor simulation.
-
-    Attributes:
-        mech_file: Mechanism file path
-        temperature: Temperature (K)
-        pressure: Pressure (atm)
-        residence_time: Residence time (s)
-        volume: Volume (cm^3)
-        composition: Starting composition (mole fractions)
-        time_out: Time limit for the simulation (s)
-    """
-
-    mech_file: Path
-    temperature: float
-    pressure: float
-    residence_time: float
-    composition: dict[str, float]
-    volume: float = 1.0
-    time_out: int | None = None
-
-    def is_compatible_with(self, other: "Config | None") -> bool:
-        """Check if this config is compatible with another config for chaining."""
-        if other is None:
-            return False
-        return (
-            self.mech_file == other.mech_file and self.composition == other.composition
-        )
+from .config import Config
 
 
 def single(config: Config) -> Solution:
