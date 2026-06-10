@@ -1,57 +1,128 @@
 """CLI for running multi-temperature jet-stirred reactor simulations."""
 
+import shutil
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
 import polars as pl
 import typer
 
-from .solve import Config
+from .config import Config, Key
+from .run import multi
+
+DATA_PATH = Path(__file__).parent / "data"
 
 app = typer.Typer()
 
 
-def read_temperatures(temps_file: Path) -> list[float]:
-    """Load temperatures (K) from a CSV file with a 'temperature' column."""
-    df = pl.read_csv(temps_file)
-    return df.get_column(df.columns[0]).cast(pl.Float64).to_list()
+class File:
+    """File names for example files."""
+
+    chemkin = "chem.inp"
+    cantera = "chem.yaml"
+    temperature = "temperature.csv"
+    composition = "composition.csv"
+    config = "config.yaml"
 
 
-def read_compositions(comps_file: Path) -> list[dict[str, float]]:
-    """Load compositions from a YAML file with a 'compositions' key."""
-    df = pl.read_csv(comps_file)
-    return df.to_dicts()
+class Format(StrEnum):
+    """Input formats for chemical kinetic data."""
+
+    chemkin = "chemkin"
+    cantera = "cantera"
 
 
-@app.command()
-def main(
-    config_file: Annotated[
-        str, typer.Argument(help="Path to YAML config file.")
-    ] = "config.yaml",
-    temps_file: Annotated[
-        str | None,
+@app.command("run")
+def run(
+    config_file: Annotated[str, typer.Argument(help="Config file")] = File.config,
+    *,
+    output_file: Annotated[
+        str, typer.Option("--output-file", "-o", help="File to save simulation results")
+    ] = "output.csv",
+    no_pass_state: Annotated[
+        bool,
         typer.Option(
-            "--temps-file", "-t", help="Path to CSV file containing temperatures."
+            "--no-pass-state", "-S", help="Turn off passing state between simulations"
         ),
-    ] = None,
-    comps_file: Annotated[
-        str | None,
-        typer.Option(
-            "--comps-file", "-c", help="Path to YAML file containing compositions."
-        ),
-    ] = None,
+    ] = False,
 ) -> None:
-    """Run JSR simulations across multiple temperatures."""
-    typer.echo(f"Loading config from: {config_file}")
-    config = Config.read_yaml(Path(config_file))
-    typer.echo(f"{config = }")
+    """Run a JSR simulation workflow."""
+    typer.echo("Loading config file\n")
+    configs = Config.multi_from_yaml(file=config_file)
 
-    if temps_file is not None:
-        typer.echo(f"Loading temperatures from: {temps_file}")
-        temperatures = read_temperatures(Path(temps_file))
-        typer.echo(f"{temperatures = }")
+    multi(
+        configs,
+        pass_state=not no_pass_state,
+        output_file=Path(output_file),
+        logger=typer.echo,
+    )
 
-    if comps_file is not None:
-        typer.echo(f"Loading compositions from: {comps_file}")
-        compositions = read_compositions(Path(comps_file))
-        typer.echo(f"{compositions = }")
+
+@app.command("example")
+def example(
+    directory: Annotated[
+        str, typer.Argument(help="Directory to save example files.")
+    ] = ".",
+    *,
+    format_: Annotated[
+        Format,
+        typer.Option("--format", "-f", help="Input format (chemkin or cantera)."),
+    ] = Format.chemkin,
+    multi_temperature: Annotated[
+        bool,
+        typer.Option(
+            "--temperature", "-t", help="Prepare a multi-temperature simulation."
+        ),
+    ] = False,
+    multi_composition: Annotated[
+        bool,
+        typer.Option(
+            "--composition", "-c", help="Prepare a multi-composition simulation."
+        ),
+    ] = False,
+) -> None:
+    """Generate example config and input files."""
+    dir_path = Path(directory)
+    dir_path.mkdir(exist_ok=True)
+
+    cantera_file = Path(File.cantera)
+    chemkin_file = None
+    if format_ == Format.chemkin:
+        shutil.copy(DATA_PATH / File.chemkin, dir_path)
+        chemkin_file = Path(File.chemkin)
+    elif format_ == Format.cantera:
+        shutil.copy(DATA_PATH / File.cantera, dir_path)
+
+    temperature = 1000
+    composition = {"CH4": 0.05, "O2": 0.21, "N2": 0.74}
+    config = Config(
+        cantera_file=cantera_file,
+        temperature=temperature,
+        pressure=1,
+        residence_time=4,
+        composition=composition,
+        volume=1.0,
+        time_out=None,
+        chemkin_file=chemkin_file,
+        chemkin_thermo_file=None,
+    )
+    update = {}
+
+    if multi_temperature:
+        temperature_file = dir_path / File.temperature
+        data = {"Temperature (K)": [800, 900, 1000]}
+        pl.DataFrame(data).write_csv(temperature_file)
+        update[Key.temperature] = File.temperature
+
+    if multi_composition:
+        composition_file = dir_path / File.composition
+        data = {
+            "CH4": [0.05, 0.1, 0.15],
+            "O2": [0.21, 0.21, 0.21],
+            "N2": [0.74, 0.59, 0.44],
+        }
+        pl.DataFrame(data).write_csv(composition_file)
+        update[Key.composition] = File.composition
+
+    config.to_yaml(dir_path / File.config, update=update)

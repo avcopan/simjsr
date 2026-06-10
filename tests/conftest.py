@@ -14,6 +14,30 @@ def data_path(request: pytest.FixtureRequest) -> Path:
 
 
 @pytest.fixture
+def examples_path(request: pytest.FixtureRequest) -> Path:
+    """Path to examples."""
+    return Path(request.path).parents[1] / "examples"
+
+
+@pytest.fixture
+def grimech_config_single_path(data_path: Path) -> Path:
+    """Reference configuration path for testing."""
+    return data_path / "grimech3.0" / "config_single.yaml"
+
+
+@pytest.fixture
+def grimech_config_multi_temperature_path(data_path: Path) -> Path:
+    """Reference configuration path for testing."""
+    return data_path / "grimech3.0" / "config_multi_temperature.yaml"
+
+
+@pytest.fixture
+def grimech_config_multi_composition_path(data_path: Path) -> Path:
+    """Reference configuration path for testing."""
+    return data_path / "grimech3.0" / "config_multi_composition.yaml"
+
+
+@pytest.fixture
 def grimech_config(data_path: Path) -> Config:
     """Reference configuration for testing."""
     return Config(

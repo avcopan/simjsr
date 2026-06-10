@@ -5,25 +5,23 @@ from pathlib import Path
 from simjsr import Config
 
 
-def test__roundtrip(grimech_config: Config, tmp_path: Path) -> None:
+def test__to_yaml(grimech_config: Config, tmp_path: Path) -> None:
     """Test the roundtrip functionality."""
     out_file = tmp_path / "config.yaml"
-    grimech_config.write_yaml(out_file)
-    config = Config.read_yaml(out_file)
+    grimech_config.to_yaml(out_file)
+    config = Config.from_yaml(file=out_file)
     assert config == grimech_config
 
 
-def test__sample_yaml(tmp_path: Path) -> None:
-    """Test the sample YAML generation."""
-    out_file = tmp_path / "sample_config.yaml"
-    Config.sample_yaml(out_file)
-    config = Config.read_yaml(out_file)
-    assert config == Config(
-        cantera_file=Path("chem.yaml"),
-        temperature=1000,
-        pressure=1,
-        residence_time=4,
-        composition={"CH4": 0.05, "O2": 0.21, "N2": 0.74},
-        volume=1.0,
-        time_out=None,
-    )
+def test__to_yaml_with_description(grimech_config: Config, tmp_path: Path) -> None:
+    """Test the roundtrip functionality."""
+    out_file = tmp_path / "config.yaml"
+    grimech_config.to_yaml(out_file, describe=True)
+    config = Config.from_yaml(file=out_file)
+    assert config == grimech_config
+
+
+def test__multi_from_yaml_single(grimech_config_single_path: Path) -> None:
+    """Test loading a single config."""
+    configs = Config.multi_from_yaml(file=grimech_config_single_path)
+    assert len(configs) == 1

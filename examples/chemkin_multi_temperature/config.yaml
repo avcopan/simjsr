@@ -1,0 +1,12 @@
+cantera_file: chem.yaml
+temperature: temperature.csv
+pressure: 1.0
+residence_time: 4.0
+composition:
+  CH4: 0.05
+  O2: 0.21
+  N2: 0.74
+volume: 1.0
+time_out: null
+chemkin_file: chem.inp
+chemkin_thermo_file: null
