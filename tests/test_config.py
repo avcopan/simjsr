@@ -19,7 +19,7 @@ def test__sample_yaml(tmp_path: Path) -> None:
     Config.sample_yaml(out_file)
     config = Config.read_yaml(out_file)
     assert config == Config(
-        mech_file=Path("chem.yaml"),
+        cantera_file=Path("chem.yaml"),
         temperature=1000,
         pressure=1,
         residence_time=4,

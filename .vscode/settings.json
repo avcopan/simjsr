@@ -1,0 +1,4 @@
+{
+    "ty.configurationFile": "./ty.toml",
+    "python.defaultInterpreterPath": "./.pixi/envs/dev/bin/python"
+}

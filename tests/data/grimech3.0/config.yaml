@@ -1,4 +1,4 @@
-mech_file: chem.yaml
+cantera_file: chem.yaml
 temperature: 1000  # K
 pressure: 1  # atm
 residence_time: 4  # s

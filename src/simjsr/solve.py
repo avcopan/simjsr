@@ -107,7 +107,7 @@ def _single(config: Config) -> Solution:
     Returns:
         Steady state solution
     """
-    phase = ct.Solution(config.mech_file)
+    phase = ct.Solution(config.cantera_file)
 
     # Use composition from the previous iteration to speed up convergence
     phase.TPX = config.temperature, config.pressure * ct.one_atm, config.composition

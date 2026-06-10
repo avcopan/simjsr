@@ -1,0 +1,3 @@
+[environment]
+python = ".pixi/envs/dev/bin/python"
+python-version = "3.13"

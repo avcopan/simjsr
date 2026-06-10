@@ -17,7 +17,7 @@ def data_path(request: pytest.FixtureRequest) -> Path:
 def grimech_config(data_path: Path) -> Config:
     """Reference configuration for testing."""
     return Config(
-        mech_file=data_path / "grimech3.0" / "chem.yaml",
+        cantera_file=data_path / "grimech3.0" / "chem.yaml",
         temperature=1000,
         pressure=1,
         residence_time=4,
@@ -29,7 +29,7 @@ def grimech_config(data_path: Path) -> Config:
 def slow_config(data_path: Path) -> Config:
     """Reference configuration for testing."""
     return Config(
-        mech_file=data_path / "slow" / "chem.yaml",
+        cantera_file=data_path / "slow" / "chem.yaml",
         temperature=825,
         pressure=1.1,
         residence_time=4,

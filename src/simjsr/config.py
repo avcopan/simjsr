@@ -10,7 +10,7 @@ class Config(BaseModel):
     """Configuration for a jet-stirred reactor simulation.
 
     Attributes:
-        mech_file: Mechanism file path
+        cantera_file: Cantera file path
         temperature: Temperature (K)
         pressure: Pressure (atm)
         residence_time: Residence time (s)
@@ -19,7 +19,7 @@ class Config(BaseModel):
         time_out: Time limit for the simulation (s)
     """
 
-    mech_file: Path
+    cantera_file: Path
     temperature: float
     pressure: float
     residence_time: float
@@ -30,7 +30,7 @@ class Config(BaseModel):
     model_config = {
         "json_schema_extra": {
             "field_meta": {
-                "mech_file": {"comment": "", "sample": "chem.yaml"},
+                "cantera_file": {"comment": "", "sample": "chem.yaml"},
                 "temperature": {"comment": "K", "sample": 1000},
                 "pressure": {"comment": "atm", "sample": 1},
                 "residence_time": {"comment": "s", "sample": 4},
@@ -49,7 +49,8 @@ class Config(BaseModel):
         if other is None:
             return False
         return (
-            self.mech_file == other.mech_file and self.composition == other.composition
+            self.cantera_file == other.cantera_file
+            and self.composition == other.composition
         )
 
     def dump_yaml(self) -> str:
