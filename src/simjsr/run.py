@@ -37,12 +37,13 @@ def multi(
     Returns:
         Steady state mole fractions for each simulation
     """
+    df = None
     if isinstance(config_, Sequence) and not isinstance(config_, str):
         configs = config_
     else:
         logger("Loading config file")
 
-        configs = Config.multi_from_yaml(file=config_)
+        configs, df = Config.all_with_dataframe_from_yaml(file=config_)
 
     if not is_sequence_of(configs, Config):
         msg = "All configurations must be of type Config"
@@ -74,7 +75,11 @@ def multi(
         logger("")
 
     if output_file is not None:
-        pl.from_dicts(mole_fracs_lst).write_csv(output_file)
+        df_out = pl.from_dicts(mole_fracs_lst)
+        if df is not None:
+            df_out = hconcat_rename_left(df, df_out, suffix="_init")
+
+        df_out.write_csv(output_file)
 
     return mole_fracs_lst
 
@@ -203,3 +208,14 @@ def clock_end(logger: Logger, event: str, start_counter: float) -> None:
 def is_sequence_of[T](seq: Sequence[object], typ: type[T]) -> TypeGuard[Sequence[T]]:
     """Check the types of the elements in a sequence."""
     return all(isinstance(x, typ) for x in seq)
+
+
+def hconcat_rename_left(
+    df1: pl.DataFrame, df2: pl.DataFrame, suffix: str = "_left"
+) -> pl.DataFrame:
+    """Horizontally concatenate dataframes, renaming the left dataframe columns."""
+    clashes = set(df1.columns) & set(df2.columns)
+
+    df1 = df1.rename({col: f"{col}{suffix}" for col in clashes})
+
+    return pl.concat([df1, df2], how="horizontal")

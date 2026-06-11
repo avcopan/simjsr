@@ -23,5 +23,5 @@ def test__to_yaml_with_description(grimech_config: Config, tmp_path: Path) -> No
 
 def test__multi_from_yaml_single(grimech_config_single_path: Path) -> None:
     """Test loading a single config."""
-    configs = Config.multi_from_yaml(file=grimech_config_single_path)
+    configs, _ = Config.all_with_dataframe_from_yaml(file=grimech_config_single_path)
     assert len(configs) == 1

@@ -115,9 +115,9 @@ def example(
     if multi_composition:
         composition_file = dir_path / File.composition
         data = {
-            "CH4": [0.05, 0.1, 0.15],
-            "O2": [0.21, 0.21, 0.21],
-            "N2": [0.74, 0.59, 0.44],
+            "CH4": [0.05, 0.05, 0.05],
+            "O2": [0.21, 0.22, 0.23],
+            "N2": [0.74, 0.73, 0.72],
         }
         pl.DataFrame(data).write_csv(composition_file)
         update[Key.composition] = File.composition

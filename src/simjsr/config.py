@@ -1,7 +1,7 @@
 """Configuration for simulations."""
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import polars as pl
 import yaml
@@ -101,19 +101,21 @@ class Config(BaseModel):
     @classmethod
     def from_yaml(
         cls, *, file: str | Path | None = None, text: str | Path | None = None
-    ) -> "Config":
+    ) -> Self:
         """Instantiate from YAML file or text."""
-        config, *extra_configs = cls.multi_from_yaml(file=file, text=text)
+        (config, *extra_configs), _ = cls.all_with_dataframe_from_yaml(
+            file=file, text=text
+        )
         if extra_configs:
             msg = f"Cannot read config from multi-config YAML. {extra_configs = }"
             raise ValueError(msg)
         return config
 
     @classmethod
-    def multi_from_yaml(
+    def all_with_dataframe_from_yaml(
         cls, *, file: str | Path | None = None, text: str | Path | None = None
-    ) -> "list[Config]":
-        """Instantiate multiple configs from YAML file or text."""
+    ) -> tuple[list[Self], pl.DataFrame | None]:
+        """Instantiate  from YAML file or text and return as a DataFrame."""
         if file is not None:
             text = Path(file).read_text()
 
@@ -122,8 +124,6 @@ class Config(BaseModel):
             raise ValueError(msg)
 
         data = yaml.safe_load(text)
-
-        datas = [data]
         temperature = data.get(Key.temperature)
         composition = data.get(Key.composition)
 
@@ -131,32 +131,18 @@ class Config(BaseModel):
             msg = f"{temperature = } and {composition = } cannot both be file paths."
             raise TypeError(msg)
 
+        df = None
+        datas = [data]
         if isinstance(temperature, str):
-            ts = _load_temperatures_from_file(temperature)
-            datas = [{**data, "temperature": t} for t in ts]
+            df = pl.read_csv(temperature)
+            datas = [{**data, Key.temperature: t} for t in df[:, 0]]
 
         if isinstance(composition, str):
-            cs = _load_compositions_from_file(composition)
-            datas = [{**data, "composition": c} for c in cs]
+            df = pl.read_csv(composition)
+            datas = [{**data, Key.composition: c} for c in df.iter_rows(named=True)]
 
-        return [cls.model_validate(d) for d in datas]
-
-
-def _to_yaml_serialized_value(value: object) -> str:
-    """Serialize a value to a YAML string."""
-    return yaml.safe_dump(value, default_flow_style=True).splitlines()[0]
-
-
-def _load_temperatures_from_file(temps_file: Path | str) -> list[float]:
-    """Load temperatures (K) from a CSV file with a 'temperature' column."""
-    df = pl.read_csv(temps_file)
-    return df.get_column(df.columns[0]).cast(pl.Float64).to_list()
-
-
-def _load_compositions_from_file(comps_file: Path | str) -> list[dict[str, float]]:
-    """Load compositions from a YAML file with a 'compositions' key."""
-    df = pl.read_csv(comps_file)
-    return df.to_dicts()
+        configs = [cls.model_validate(d) for d in datas]
+        return configs, df
 
 
 class Key:
@@ -164,3 +150,9 @@ class Key:
 
     temperature = "temperature"
     composition = "composition"
+
+
+# Helpers
+def _to_yaml_serialized_value(value: object) -> str:
+    """Serialize a value to a YAML string."""
+    return yaml.safe_dump(value, default_flow_style=True).splitlines()[0]
