@@ -1,12 +1,12 @@
 """Reactors."""
 
 import textwrap
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from copy import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from time import perf_counter
-from typing import Any
+from typing import Any, TypeGuard
 
 import cantera as ct
 import polars as pl
@@ -18,10 +18,71 @@ from .config import Config
 Logger = Callable[[str], Any]
 
 
-def single(
-    config: Config,
+def multi(
+    config_: Sequence[Config] | Path | str,
     *,
-    logger: Logger | None = None,
+    pass_state: bool = True,
+    output_file: Path | None = None,
+    logger: Logger = lambda _: None,
+) -> list[dict[str, float]]:
+    """Run multiple jet-stirred reactor simulations.
+
+    Args:
+        config_: Configurations for the simulations
+        pass_state: Whether to pass solved state to the next simulation, if its
+            initial composition is the same
+        logger: Optional logger for messages
+        output_file: Optional file to save simulation results
+
+    Returns:
+        Steady state mole fractions for each simulation
+    """
+    if isinstance(config_, Sequence) and not isinstance(config_, str):
+        configs = config_
+    else:
+        logger("Loading config file")
+
+        configs = Config.multi_from_yaml(file=config_)
+
+    if not is_sequence_of(configs, Config):
+        msg = "All configurations must be of type Config"
+        raise TypeError(msg)
+
+    config_count = len(configs)
+    last_config = last_mole_fracs = None
+    mole_fracs_lst = []
+    for num, init_config in enumerate(configs, start=1):
+        yaml_text = init_config.yaml_text(describe=True)
+        logger(f"Run {num} / {config_count}:")
+        logger(textwrap.indent(yaml_text.strip(), "  "))
+
+        # If requested, re-use solved composition
+        config = init_config
+        if (
+            pass_state
+            and init_config.is_compatible_with(last_config)
+            and last_mole_fracs is not None
+        ):
+            config = replace(init_config, composition=last_mole_fracs)
+
+        mole_fracs = single(config=config, logger=logger, raise_on_timout=False)
+        mole_fracs_lst.append(mole_fracs)
+
+        last_config = init_config
+        last_mole_fracs = mole_fracs
+
+        logger("")
+
+    if output_file is not None:
+        pl.from_dicts(mole_fracs_lst).write_csv(output_file)
+
+    return mole_fracs_lst
+
+
+def single(
+    config: Config | Path | str,
+    *,
+    logger: Logger = lambda _: None,
     output_file: Path | None = None,
     raise_on_timout: bool = True,
 ) -> dict[str, float]:
@@ -40,6 +101,8 @@ def single(
         TimeoutError: If the simulation exceeds the configured time limit
     """
     start_counter = clock_start(logger, "Starting simulation")
+
+    config = config if isinstance(config, Config) else Config.from_yaml(file=config)
 
     if not config.cantera_file.exists():
         generate_cantera_file_from_chemkin(config, logger=logger)
@@ -64,95 +127,6 @@ def single(
         pl.from_dicts([mole_fracs]).write_csv(output_file)
 
     return mole_fracs
-
-
-def multi(
-    configs: Sequence[Config],
-    *,
-    pass_state: bool = True,
-    output_file: Path | None = None,
-    logger: Logger | None = None,
-) -> list[dict[str, float]]:
-    """Run multiple jet-stirred reactor simulations.
-
-    Args:
-        configs: Configurations for the simulations
-        pass_state: Whether to pass solved state to the next simulation, if its
-            initial composition is the same
-        logger: Optional logger for messages
-        output_file: Optional file to save simulation results
-
-    Returns:
-        Steady state mole fractions for each simulation
-    """
-    config_count = len(configs)
-    last_config = last_mole_fracs = None
-    mole_fracs_lst = []
-    for num, init_config in enumerate(configs, start=1):
-        if logger is not None:
-            yaml_text = init_config.yaml_text(describe=True)
-            logger(f"Run {num} / {config_count}:")
-            logger(textwrap.indent(yaml_text.strip(), "  "))
-
-        # If requested, re-use solved composition
-        config = init_config
-        if (
-            pass_state
-            and init_config.is_compatible_with(last_config)
-            and last_mole_fracs is not None
-        ):
-            config = replace(init_config, composition=last_mole_fracs)
-
-        mole_fracs = single(config=config, logger=logger, raise_on_timout=False)
-        mole_fracs_lst.append(mole_fracs)
-
-        last_config = init_config
-        last_mole_fracs = mole_fracs
-
-        if logger is not None and num < config_count:
-            logger("")
-
-    if output_file is not None:
-        pl.from_dicts(mole_fracs_lst).write_csv(output_file)
-
-    return mole_fracs_lst
-
-
-def multi_temperature(
-    config: Config, temperatures: Sequence[float], *, logger: Logger | None = None
-) -> list[dict[str, float]]:
-    """Run multiple jet-stirred reactor simulations at different temperatures.
-
-    Args:
-        config: Base configuration for the simulations
-        temperatures: List of temperatures (K)
-        logger: Optional logger for messages
-
-    Returns:
-        Steady state mole fractions for each simulation
-    """
-    configs = [replace(config, temperature=t) for t in temperatures]
-    return multi(configs, logger=logger)
-
-
-def multi_composition(
-    config: Config,
-    compositions: Sequence[Mapping[str, float]],
-    *,
-    logger: Logger | None = None,
-) -> list[dict[str, float]]:
-    """Run multiple jet-stirred reactor simulations at different compositions.
-
-    Args:
-        config: Base configuration for the simulations
-        compositions: List of compositions (mole fractions)
-        logger: Optional logger for messages
-
-    Returns:
-        Steady state mole fractions for each simulation
-    """
-    configs = [replace(config, composition=comp) for comp in compositions]
-    return multi(configs, logger=logger)
 
 
 def _single(config: Config) -> dict[str, float]:
@@ -191,7 +165,7 @@ def _single(config: Config) -> dict[str, float]:
 
 # Helpers
 def generate_cantera_file_from_chemkin(
-    config: Config, *, logger: Logger | None = None
+    config: Config, *, logger: Logger = lambda _: None
 ) -> None:
     """Ensure the Cantera file is available."""
     if config.chemkin_file is None:
@@ -202,11 +176,7 @@ def generate_cantera_file_from_chemkin(
         msg = f"{config.chemkin_file = } does not exist."
         raise ValueError(msg)
 
-    if logger is not None:
-        logger(
-            f"Converting {config.chemkin_file} to Cantera format "
-            f"({config.cantera_file})"
-        )
+    logger(f"Converting {config.chemkin_file} to Cantera format")
 
     convert.from_chemkin(
         chemkin_file=config.chemkin_file,
@@ -215,18 +185,21 @@ def generate_cantera_file_from_chemkin(
     )
 
 
-def clock_start(logger: Logger | None, event: str) -> float:
+def clock_start(logger: Logger, event: str) -> float:
     """Log the start time of an event."""
-    if logger is not None:
-        start_time = datetime.now(tz=UTC)
-        logger(f"{event} at {start_time:%Y-%m-%d %H:%M:%S}")
+    start_time = datetime.now(tz=UTC)
+    logger(f"{event} at {start_time:%Y-%m-%d %H:%M:%S}")
     return perf_counter()
 
 
-def clock_end(logger: Logger | None, event: str, start_counter: float) -> None:
+def clock_end(logger: Logger, event: str, start_counter: float) -> None:
     """Log the start time of a simulation."""
-    if logger is not None:
-        end_time = datetime.now(tz=UTC)
-        elapsed = timedelta(seconds=perf_counter() - start_counter)
-        logger(f"{event} at {end_time:%Y-%m-%d %H:%M:%S}")
-        logger(f"Elapsed time: {elapsed}")
+    end_time = datetime.now(tz=UTC)
+    elapsed = timedelta(seconds=perf_counter() - start_counter)
+    logger(f"{event} at {end_time:%Y-%m-%d %H:%M:%S}")
+    logger(f"Elapsed time: {elapsed}")
+
+
+def is_sequence_of[T](seq: Sequence[object], typ: type[T]) -> TypeGuard[Sequence[T]]:
+    """Check the types of the elements in a sequence."""
+    return all(isinstance(x, typ) for x in seq)

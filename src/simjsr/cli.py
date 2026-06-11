@@ -48,11 +48,8 @@ def run(
     ] = False,
 ) -> None:
     """Run a JSR simulation workflow."""
-    typer.echo("Loading config file\n")
-    configs = Config.multi_from_yaml(file=config_file)
-
     multi(
-        configs,
+        config_file,
         pass_state=not no_pass_state,
         output_file=Path(output_file),
         logger=typer.echo,
