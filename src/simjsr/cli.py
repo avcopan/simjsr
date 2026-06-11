@@ -122,4 +122,4 @@ def example(
         pl.DataFrame(data).write_csv(composition_file)
         update[Key.composition] = File.composition
 
-    config.to_yaml(dir_path / File.config, update=update)
+    config.to_yaml(dir_path / File.config, update=update, describe=True)

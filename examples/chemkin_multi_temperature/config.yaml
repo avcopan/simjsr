@@ -1,12 +1,9 @@
-cantera_file: chem.yaml
-temperature: temperature.csv
-pressure: 1.0
-residence_time: 4.0
-composition:
-  CH4: 0.05
-  O2: 0.21
-  N2: 0.74
-volume: 1.0
-time_out: null
-chemkin_file: chem.inp
-chemkin_thermo_file: null
+cantera_file: chem.yaml                       # Cantera file (can be generated from Chemkin files)
+temperature: temperature.csv                  # Temperature (K)
+pressure: 1.0                                 # Pressure (atm)
+residence_time: 4.0                           # Residence time (s)
+composition: {CH4: 0.05, N2: 0.74, O2: 0.21}  # Starting composition (mole fractions)
+volume: 1.0                                   # Reactor volume (cm^3)
+time_out: null                                # Time limit for the simulation (s)
+chemkin_file: chem.inp                        # Chemkin mechanism file (used to generate Cantera file)
+chemkin_thermo_file: null                     # Chemkin thermo file (used to generate Cantera file)
