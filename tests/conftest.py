@@ -50,13 +50,13 @@ def grimech_config(data_path: Path) -> Config:
 
 
 @pytest.fixture
-def slow_config(data_path: Path) -> Config:
+def timeout_config(data_path: Path) -> Config:
     """Reference configuration for testing."""
     return Config(
-        cantera_file=data_path / "slow" / "chem.yaml",
-        temperature=825,
-        pressure=1.1,
+        cantera_file=data_path / "grimech3.0" / "chem.yaml",
+        temperature=1000,
+        pressure=1,
         residence_time=4,
-        composition={"CPT(563)": 0.005, "O2(6)": 0.133928571, "N2": 0.861071429},
-        time_out=1,
+        composition={"CH4": 0.05, "O2": 0.21, "N2": 0.74},
+        time_out=0.0000001,
     )

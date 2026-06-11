@@ -33,7 +33,7 @@ class Config(BaseModel):
         description="Starting composition (mole fractions)"
     )
     volume: float = Field(description="Reactor volume (cm^3)", default=1.0)
-    time_out: int | None = Field(
+    time_out: float | None = Field(
         description="Time limit for the simulation (s)", default=None
     )
     chemkin_file: Path | None = Field(

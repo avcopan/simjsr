@@ -1,6 +1,5 @@
 """Reactors."""
 
-import signal
 import textwrap
 from collections.abc import Callable, Mapping, Sequence
 from copy import replace
@@ -11,6 +10,7 @@ from typing import Any
 
 import cantera as ct
 import polars as pl
+from func_timeout import FunctionTimedOut, func_timeout
 
 from . import convert
 from .config import Config
@@ -19,7 +19,11 @@ Logger = Callable[[str], Any]
 
 
 def single(
-    config: Config, *, logger: Logger | None = None, output_file: Path | None = None
+    config: Config,
+    *,
+    logger: Logger | None = None,
+    output_file: Path | None = None,
+    raise_on_timout: bool = True,
 ) -> dict[str, float]:
     """Run a single jet-stirred reactor simulation.
 
@@ -27,6 +31,7 @@ def single(
         config: Configuration for the simulation
         logger: Optional logger for messages
         output_file: Optional file to save simulation results
+        raise_on_timout: Whether to raise a TimeoutError if the simulation times out
 
     Returns:
         Steady state mole fractions
@@ -34,48 +39,26 @@ def single(
     Raises:
         TimeoutError: If the simulation exceeds the configured time limit
     """
-    # Set up a timeout handler to prevent simulations from running indefinitely
-    if config.time_out is not None:
-        signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(config.time_out)
-
-    if logger is not None:
-        start_time = datetime.now(tz=UTC)
-        start_counter = perf_counter()
-        logger(f"Starting simulation at {start_time:%Y-%m-%d %H:%M:%S}")
+    start_counter = clock_start(logger, "Starting simulation")
 
     if not config.cantera_file.exists():
-        if config.chemkin_file is None:
-            msg = "chemkin_file must be provided if cantera_file does not exist."
-            raise ValueError(msg)
+        generate_cantera_file_from_chemkin(config, logger=logger)
 
-        if not config.chemkin_file.exists():
-            msg = f"{config.chemkin_file = } does not exist."
-            raise ValueError(msg)
-
-        if logger is not None:
-            logger(
-                f"Converting {config.chemkin_file} to Cantera format "
-                f"({config.cantera_file})"
-            )
-
-        convert.from_chemkin(
-            chemkin_file=config.chemkin_file,
-            chemkin_thermo_file=config.chemkin_thermo_file,
-            cantera_file=config.cantera_file,
-        )
+    phase = ct.Solution(config.cantera_file)
 
     try:
-        mole_fracs = _single(config=config)
-    finally:
-        signal.alarm(0)
-
-    if logger is not None:
-        end_time = datetime.now(tz=UTC)
-        end_counter = perf_counter()
-        elapsed = timedelta(seconds=end_counter - start_counter)
-        logger(f"Finished simulation at {end_time:%Y-%m-%d %H:%M:%S}")
-        logger(f"Elapsed time: {elapsed}")
+        mole_fracs = (
+            _single(config)
+            if config.time_out is None
+            else func_timeout(config.time_out, _single, (config,))
+        )
+    except FunctionTimedOut:
+        clock_end(logger, "Simulation timed out", start_counter)
+        mole_fracs = {s: float("nan") for s in phase.species_names}
+        if raise_on_timout:
+            raise
+    else:
+        clock_end(logger, "Finished simulation", start_counter)
 
     if output_file is not None:
         pl.from_dicts([mole_fracs]).write_csv(output_file)
@@ -120,7 +103,7 @@ def multi(
         ):
             config = replace(init_config, composition=last_mole_fracs)
 
-        mole_fracs = single(config=config, logger=logger)
+        mole_fracs = single(config=config, logger=logger, raise_on_timout=False)
         mole_fracs_lst.append(mole_fracs)
 
         last_config = init_config
@@ -206,6 +189,44 @@ def _single(config: Config) -> dict[str, float]:
     return reactor.phase.mole_fraction_dict()
 
 
-def _timeout_handler(_signum: int, _frame: object) -> None:
-    msg = "The simulation exceeded the configured time limit."
-    raise TimeoutError(msg)
+# Helpers
+def generate_cantera_file_from_chemkin(
+    config: Config, *, logger: Logger | None = None
+) -> None:
+    """Ensure the Cantera file is available."""
+    if config.chemkin_file is None:
+        msg = "chemkin_file must be provided if cantera_file does not exist."
+        raise ValueError(msg)
+
+    if not config.chemkin_file.exists():
+        msg = f"{config.chemkin_file = } does not exist."
+        raise ValueError(msg)
+
+    if logger is not None:
+        logger(
+            f"Converting {config.chemkin_file} to Cantera format "
+            f"({config.cantera_file})"
+        )
+
+    convert.from_chemkin(
+        chemkin_file=config.chemkin_file,
+        chemkin_thermo_file=config.chemkin_thermo_file,
+        cantera_file=config.cantera_file,
+    )
+
+
+def clock_start(logger: Logger | None, event: str) -> float:
+    """Log the start time of an event."""
+    if logger is not None:
+        start_time = datetime.now(tz=UTC)
+        logger(f"{event} at {start_time:%Y-%m-%d %H:%M:%S}")
+    return perf_counter()
+
+
+def clock_end(logger: Logger | None, event: str, start_counter: float) -> None:
+    """Log the start time of a simulation."""
+    if logger is not None:
+        end_time = datetime.now(tz=UTC)
+        elapsed = timedelta(seconds=perf_counter() - start_counter)
+        logger(f"{event} at {end_time:%Y-%m-%d %H:%M:%S}")
+        logger(f"Elapsed time: {elapsed}")

@@ -4,6 +4,7 @@ from copy import replace
 from typing import Any
 
 import pytest
+from func_timeout import FunctionTimedOut
 
 from simjsr import Config, run
 
@@ -13,10 +14,10 @@ def test__single(grimech_config: Config) -> None:
     run.single(config=grimech_config)
 
 
-def test__timeout(slow_config: Config) -> None:
+def test__timeout(timeout_config: Config) -> None:
     """Test that a timeout error is raised when the simulation takes too long."""
-    with pytest.raises(TimeoutError):
-        run.single(config=slow_config)
+    with pytest.raises(FunctionTimedOut):
+        run.single(config=timeout_config)
 
 
 @pytest.mark.parametrize(
