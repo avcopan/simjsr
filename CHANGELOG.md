@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Add `--version` flag to CLI for printing the version
+
 ### Fixed
 
 - Include descriptions in generated examples (this was the initial intented behavior)

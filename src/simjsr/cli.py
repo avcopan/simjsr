@@ -2,6 +2,7 @@
 
 import shutil
 from enum import StrEnum
+from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated
 
@@ -31,6 +32,29 @@ class Format(StrEnum):
 
     chemkin = "chemkin"
     cantera = "cantera"
+
+
+def version_callback(*, value: bool) -> None:
+    """Print the package version and exit when requested."""
+    if value:
+        typer.echo(version("simjsr"))
+        raise typer.Exit
+
+
+@app.callback()
+def main(
+    *,
+    _version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            callback=version_callback,
+            is_eager=True,
+            help="Show the version and exit.",
+        ),
+    ] = False,
+) -> None:
+    """Command line interface."""
 
 
 @app.command("run")

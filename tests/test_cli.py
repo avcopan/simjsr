@@ -8,6 +8,7 @@ import polars as pl
 import pytest
 from typer.testing import CliRunner
 
+import simjsr
 from simjsr.cli import app
 
 runner = CliRunner()
@@ -18,6 +19,13 @@ EXAMPLES = [
     (["example", "-f", "chemkin", "-t"], "chemkin_multi_temperature", 3),
     (["example", "-f", "chemkin", "-c"], "chemkin_multi_composition", 3),
 ]
+
+
+def test__version_flag() -> None:
+    """Test the long form --version flag."""
+    result = runner.invoke(app, ["--version"])
+    assert result.exit_code == 0
+    assert f"{simjsr.__version__}" in result.stdout
 
 
 @pytest.mark.parametrize(("args", "name", "row_count"), EXAMPLES)
